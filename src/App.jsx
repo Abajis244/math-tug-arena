@@ -266,15 +266,20 @@ const STYLES = `
 `;
 
 // --- Firebase Configuration ---
-const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+cconst firebaseConfig = {
+  apiKey: "AIzaSyDxPg-ZPISwB0eKhYMDUDL5evPKPsx7POM",
+  authDomain: "math-tug-arena.firebaseapp.com",
+  projectId: "math-tug-arena",
+  storageBucket: "math-tug-arena.firebasestorage.app",
+  messagingSenderId: "651768070745",
+  appId: "1:651768070745:web:b34e2f87d8abf053922748",
+  measurementId: "G-55VJYDNDSR"
 };
+
+// Initialize Firebase
+
 const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = 'math-tug-arena-pro-v6';
