@@ -276,13 +276,10 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
-// Initialize Firebase
-
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = 'math-tug-arena-pro-v6';
+const appId = 'math-tug-arena';
 
 // --- Constants & Config ---
 const MAX_SCORE_DIFFERENCE = 15; 
