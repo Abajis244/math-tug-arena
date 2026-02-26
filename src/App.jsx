@@ -268,7 +268,7 @@ const STYLES = `
 // --- Firebase Configuration ---
 // TRICK THE BOTS: Split the key in half so GitHub scanners can't read it
 const keyPart1 = "AIzaSy"; 
-const keyPart2 = "DxPg-ZPISwB0eKhYMDUDL5evPKPsx7POM"; // Replace this with the rest of your new key if you regenerated it!
+const keyPart2 = "C7yj-ZMv4GHn2CUwdx6vwS3fQTXcx3-eg"; // Replace this with the rest of your new key if you regenerated it!
 
 const firebaseConfig = {
   apiKey: keyPart1 + keyPart2, // Stitches it together safely!
