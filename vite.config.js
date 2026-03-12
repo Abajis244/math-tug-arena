@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({ 
       registerType: 'autoUpdate',
-      injectRegister: 'auto',
+      injectRegister: 'inline',
       base: '/math-tug-arena/', // Critical for GitHub Pages deployment path
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}']

@@ -6,7 +6,7 @@ import {
   Check, X, Swords, Globe, Edit3, Save, Volume2, WifiOff, BatteryCharging,
   Code, Snowflake, Crown, Gift, Medal, Star, Lock, Timer, Sparkles, Share2
 } from 'lucide-react';
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { 
   getFirestore, doc, setDoc, getDoc, onSnapshot, updateDoc, collection, 
   serverTimestamp, increment, runTransaction, initializeFirestore, persistentLocalCache, persistentMultipleTabManager
@@ -328,6 +328,8 @@ const STYLES = `
 `;
 
 // --- Firebase Configuration ---
+const appId = 'math-tug-arena';
+
 // TRICK THE BOTS: Split the key to avoid GitHub scanners
 const keyPart1 = "AIzaSy"; 
 const keyPart2 = "C7yj-ZMv4GHn2CUwdx6vwS3fQTXcx3-eg"; 
@@ -342,26 +344,28 @@ const firebaseConfig = {
   measurementId: "G-55VJYDNDSR"
 };
 
-// Check if we are running without a real key
-const isOfflineMode = !firebaseConfig.apiKey || firebaseConfig.apiKey.includes("dummy");
+// SAFE GLOBAL DECLARATION
+const IS_OFFLINE = !firebaseConfig.apiKey || firebaseConfig.apiKey.includes("dummy");
 
-// Initialize Firebase safely (prevents errors on page refreshes)
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-const auth = getAuth(app);
-
+// SAFE FIREBASE INITIALIZATION
+let app;
 let db;
-try {
-  // Attempt to initialize with Multi-Tab Offline Caching
-  db = initializeFirestore(app, {
-    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-  });
-} catch (e) {
-  // Fallback if the browser doesn't support persistent caching or it's already active
+if (!getApps().length) {
+  app = initializeApp(firebaseConfig);
+  try {
+    // Attempt to initialize with Multi-Tab Offline Caching
+    db = initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+    });
+  } catch (e) {
+    // Fallback if the browser doesn't support persistent caching or it's already active
+    db = getFirestore(app);
+  }
+} else {
+  app = getApp();
   db = getFirestore(app);
 }
-
-const appId = 'math-tug-arena';
-
+const auth = getAuth(app);
 
 // --- Constants & Config ---
 const MAX_SCORE_DIFFERENCE = 15; 
@@ -488,7 +492,7 @@ export default function App() {
 
   useEffect(() => {
     const initAuth = async () => {
-      if (isOfflineMode) {
+      if (IS_OFFLINE) {
         setUser({ uid: 'local-offline-user' });
         setLoading(false);
         return;
@@ -508,7 +512,7 @@ export default function App() {
     };
     initAuth();
 
-    if (!isOfflineMode) {
+    if (!IS_OFFLINE) {
       const unsubscribe = onAuthStateChanged(auth, (u) => { 
         if (u) setUser(u); 
         setLoading(false); 
@@ -526,7 +530,7 @@ export default function App() {
       avatar: "🐺", title: "Novice", banner: "void" 
     };
 
-    if (isOfflineMode) {
+    if (IS_OFFLINE) {
        setStats(initialStats);
        return;
     }
@@ -549,7 +553,7 @@ export default function App() {
     const newStats = { ...stats, ...updates };
     setStats(newStats);
 
-    if (isOfflineMode) return;
+    if (IS_OFFLINE) return;
 
     try {
       await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), newStats, { merge: true });
@@ -611,7 +615,7 @@ export default function App() {
     matchData.newSR = newStats.sr;
     matchData.xpGained = xpGained;
 
-    if (isOfflineMode) return;
+    if (IS_OFFLINE) return;
 
     try { 
       await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), newStats, { merge: true }); 
@@ -1143,26 +1147,22 @@ function MultiplayerLobby({ user, currentConfig, onMatchReady }) {
   const hostedMatchIdRef = useRef(null); 
   const isMatchReadyRef = useRef(false);
 
-  // Check if offline
-  const isOfflineMode = firebaseConfig.apiKey === "dummy" || !firebaseConfig.apiKey;
-
   useEffect(() => {
     return () => { 
         if (unsubRef.current) unsubRef.current(); 
-        if (hostedMatchIdRef.current && !isMatchReadyRef.current && !isOfflineMode) {
+        if (hostedMatchIdRef.current && !isMatchReadyRef.current && !IS_OFFLINE) {
             updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', hostedMatchIdRef.current), { status: 'CANCELLED' }).catch(()=>{});
         }
     };
-  }, [isOfflineMode]);
+  }, []);
 
   const createMatch = async () => {
     playArcadeSound('click');
-    if (isOfflineMode) {
+    if (IS_OFFLINE) {
        setErrorMsg("Multiplayer requires Firebase Configuration.");
        return;
     }
     if (!user) return;
-    playArcadeSound('click');
     setStatus("HOSTING");
     const newMatchId = Math.floor(10000 + Math.random() * 90000).toString();
     hostedMatchIdRef.current = newMatchId;
@@ -1195,12 +1195,11 @@ function MultiplayerLobby({ user, currentConfig, onMatchReady }) {
 
   const joinMatch = async () => {
     playArcadeSound('click');
-    if (isOfflineMode) {
+    if (IS_OFFLINE) {
        setErrorMsg("Multiplayer requires Firebase Configuration.");
        return;
     }
     if (!user) return;
-    playArcadeSound('click');
     if (!matchIdInput || matchIdInput.length < 5) return;
     setStatus("JOINING");
     setErrorMsg("");
@@ -1329,7 +1328,7 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
   useEffect(() => {
     const handleBeforeUnload = () => {
        const { isMulti, matchId, playerSide } = gameInfoRef.current;
-       if (isMulti && matchActive.current && matchId) {
+       if (isMulti && matchActive.current && matchId && !IS_OFFLINE) {
            const forfeitWinner = playerSide === 'p1' ? 'p2' : 'p1';
            const matchRef = doc(db, 'artifacts', appId, 'public', 'data', 'matches', matchId);
            updateDoc(matchRef, { status: 'FINISHED', winner: forfeitWinner }).catch(()=>{});
@@ -1341,7 +1340,7 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
       window.removeEventListener('beforeunload', handleBeforeUnload);
       isMounted.current = false; 
       const { isMulti, matchId, playerSide } = gameInfoRef.current;
-      if (isMulti && matchActive.current && matchId) {
+      if (isMulti && matchActive.current && matchId && !IS_OFFLINE) {
          const forfeitWinner = playerSide === 'p1' ? 'p2' : 'p1';
          const matchRef = doc(db, 'artifacts', appId, 'public', 'data', 'matches', matchId);
          updateDoc(matchRef, { status: 'FINISHED', winner: forfeitWinner }).catch(()=>{});
@@ -1469,7 +1468,7 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
         if (opponentSide === 'p1') setP1State(prev => ({...prev, hasShield: false}));
         else setP2State(prev => ({...prev, hasShield: false}));
 
-        if (isMulti && matchId) {
+        if (isMulti && matchId && !IS_OFFLINE) {
             const opponentNetworkSide = playerSide === 'p1' ? 'p2' : 'p1';
             const matchRef = doc(db, 'artifacts', appId, 'public', 'data', 'matches', matchId);
             try { updateDoc(matchRef, { [`${opponentNetworkSide}Shield`]: false }); } catch (e) {}
@@ -1482,7 +1481,7 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
     localForces.current[side] += forceAmount; 
     targetRopeRef.current += directionalForce;
 
-    if (isMulti && matchId) {
+    if (isMulti && matchId && !IS_OFFLINE) {
        const targetNetworkSide = side === 'p1' ? playerSide : (playerSide === 'p1' ? 'p2' : 'p1');
        const matchRef = doc(db, 'artifacts', appId, 'public', 'data', 'matches', matchId);
        const updateField = targetNetworkSide === 'p1' ? 'p1Force' : 'p2Force';
@@ -1649,7 +1648,7 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
         }
     };
 
-    if (isMulti && matchId) {
+    if (isMulti && matchId && !IS_OFFLINE) {
         const attackerNetworkSide = attackerSide === 'p1' ? playerSide : (playerSide === 'p1' ? 'p2' : 'p1');
         const targetNetworkSide = attackerNetworkSide === 'p1' ? 'p2' : 'p1';
         
@@ -1706,7 +1705,7 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
             spawnFloatingText("FATAL ERROR!", side, true);
             setTimeout(() => { if (isMounted.current) finalizeMatch(side !== 'p1', side !== 'p1' ? 'p2' : 'p1'); }, 1500);
             
-            if (isMulti && matchId) {
+            if (isMulti && matchId && !IS_OFFLINE) {
                 const errNetworkSide = side === 'p1' ? playerSide : (playerSide === 'p1' ? 'p2' : 'p1');
                 const winner = errNetworkSide === 'p1' ? 'p2' : 'p1';
                 updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', matchId), { status: 'FINISHED', winner }).catch(()=>{});
@@ -1740,7 +1739,7 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
     if (currentState.hasDouble) {
         baseForce *= 2;
         setState(prev => ({...prev, hasDouble: false}));
-        if (isMulti && matchId) {
+        if (isMulti && matchId && !IS_OFFLINE) {
             const uiNetworkSide = side === 'p1' ? playerSide : (playerSide === 'p1' ? 'p2' : 'p1');
             updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', matchId), { [`${uiNetworkSide}Double`]: false }).catch(()=>{});
         }
@@ -1857,7 +1856,7 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
     
     if (isMulti) {
         matchActive.current = false; 
-        if (playerSide === 'p1' && !hasFinalizedRef.current) {
+        if (playerSide === 'p1' && !hasFinalizedRef.current && !IS_OFFLINE) {
             const winner = finalRope > 0 ? 'p1' : (finalRope < 0 ? 'p2' : 'tie');
             const matchRef = doc(db, 'artifacts', appId, 'public', 'data', 'matches', matchId);
             updateDoc(matchRef, { status: 'FINISHED', winner }).catch(console.error);
@@ -1875,7 +1874,7 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
   }, [timeLeft, phase, finalizeMatch, triggerHitStop, spawnFloatingText, playerSide, isMulti, matchId, db]);
 
   useEffect(() => {
-    if (!user || !isMulti || !matchId) return;
+    if (!user || !isMulti || !matchId || IS_OFFLINE) return;
     const matchRef = doc(db, 'artifacts', appId, 'public', 'data', 'matches', matchId);
     
     const unsub = onSnapshot(matchRef, (snap) => {
@@ -2528,8 +2527,7 @@ function GlobalLeaderboard({ user }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const isOfflineMode = firebaseConfig.apiKey === "dummy" || !firebaseConfig.apiKey;
-    if (isOfflineMode) {
+    if (IS_OFFLINE) {
       setLeaders([]);
       setLoading(false);
       return;
@@ -2579,7 +2577,7 @@ function GlobalLeaderboard({ user }) {
               <div className="flex justify-center py-16"><RefreshCw className="w-10 h-10 animate-spin text-yellow-500" /></div>
             ) : leaders.length === 0 ? (
               <div className="text-center py-16 font-arcade text-slate-500 tracking-widest text-sm bg-slate-900/30">
-                 {firebaseConfig.apiKey === "dummy" ? "LEADERBOARD OFFLINE. ADD FIREBASE CONFIG." : "No intelligence found."}
+                 {IS_OFFLINE ? "LEADERBOARD OFFLINE. ADD FIREBASE CONFIG." : "No intelligence found."}
               </div>
             ) : (
               leaders.map((leader, index) => {
