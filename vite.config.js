@@ -8,8 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({ 
       registerType: 'autoUpdate',
-      injectRegister: 'auto',
-      base: '/math-tug-arena/', // Critical for GitHub Pages deployment path
+      injectRegister: 'inline', // This forces the SW inline, fixing the 404!
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}']
       },
@@ -22,7 +21,7 @@ export default defineConfig({
         background_color: '#020617',
         display: 'standalone',
         start_url: '/math-tug-arena/',
-        scope: '/math-tug-arena/', // Critical for GitHub Pages deployment path
+        scope: '/math-tug-arena/', 
         icons: [
           {
             src: 'icon-192.png',
