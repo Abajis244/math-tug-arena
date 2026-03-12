@@ -344,7 +344,6 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
 const appId = 'math-tug-arena';
 
 // Use the modern initializeFirestore with persistent caching
