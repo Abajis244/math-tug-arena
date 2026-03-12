@@ -1,0 +1,8 @@
+{
+  "short_name": "MathTug",
+  "name": "Math Tug Arena",
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#020617",
+  "background_color": "#020617"
+}
