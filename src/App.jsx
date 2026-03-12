@@ -353,28 +353,21 @@ const firebaseConfig = {
   measurementId: "G-55VJYDNDSR"
 };
 
-// SAFE GLOBAL DECLARATION
-const IS_OFFLINE = !firebaseConfig.apiKey || firebaseConfig.apiKey.includes("dummy");
+// Check if we are running without a real Firebase config
+const IS_OFFLINE = firebaseConfig.apiKey === "dummy" || !firebaseConfig.apiKey;
 
-// SAFE FIREBASE INITIALIZATION
-let app;
+// Initialize Firebase safely handling hot-reloads
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+const auth = getAuth(app);
 let db;
-if (!getApps().length) {
-  app = initializeApp(firebaseConfig);
-  try {
-    // Attempt to initialize with Multi-Tab Offline Caching
-    db = initializeFirestore(app, {
-      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-    });
-  } catch (e) {
-    // Fallback if the browser doesn't support persistent caching or it's already active
-    db = getFirestore(app);
-  }
-} else {
-  app = getApp();
+try {
+  db = initializeFirestore(app, {
+    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+  });
+} catch (e) {
   db = getFirestore(app);
 }
-const auth = getAuth(app);
+
 
 // --- Constants & Config ---
 const MAX_SCORE_DIFFERENCE = 15; 
