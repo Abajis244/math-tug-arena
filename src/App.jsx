@@ -22,12 +22,21 @@ const vibrate = (pattern) => {
   }
 };
 
+const initializeAudio = () => {
+  if (typeof window === 'undefined') return;
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  if (!globalAudioCtx && AudioContext) {
+     globalAudioCtx = new AudioContext();
+  }
+  if (globalAudioCtx && globalAudioCtx.state === 'suspended') {
+     globalAudioCtx.resume();
+  }
+};
+
 const playArcadeSound = (type) => {
   try {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return;
-    if (!globalAudioCtx) globalAudioCtx = new AudioContext();
-    if (globalAudioCtx.state === 'suspended') globalAudioCtx.resume();
+    initializeAudio();
+    if (!globalAudioCtx) return;
     
     const ctx = globalAudioCtx;
     const osc = ctx.createOscillator();
@@ -475,6 +484,10 @@ const generateProblem = (opType, difficulty, specialMode = 'STANDARD') => {
 const getRank = (sr) => [...RANKED_TIERS].reverse().find(r => sr >= r.minSR) || RANKED_TIERS[0];
 const shuffleArray = (arr) => [...arr].sort(() => Math.random() - 0.5);
 
+// Left & Right specific keyboard mappings for Shared Keyboard
+const P1_SHORTCUTS = {'1':'Z','2':'X','3':'C','4':'A','5':'S','6':'D','7':'Q','8':'W','9':'E','0':'V','DEL':'F','ENTER':'R'};
+const P2_SHORTCUTS = {'1':'M','2':',','3':'.','4':'J','5':'K','6':'L','7':'U','8':'I','9':'O','0':'N','DEL':'H','ENTER':'P'};
+
 // --- Main App Component ---
 export default function App() {
   const [user, setUser] = useState(null);
@@ -488,11 +501,9 @@ export default function App() {
   });
   const [loading, setLoading] = useState(true);
 
-  const initializeAudio = () => playArcadeSound('click');
-
   useEffect(() => {
     const initAuth = async () => {
-      if (IS_OFFLINE) {
+      if (isOfflineMode) {
         setUser({ uid: 'local-offline-user' });
         setLoading(false);
         return;
@@ -512,7 +523,7 @@ export default function App() {
     };
     initAuth();
 
-    if (!IS_OFFLINE) {
+    if (!isOfflineMode) {
       const unsubscribe = onAuthStateChanged(auth, (u) => { 
         if (u) setUser(u); 
         setLoading(false); 
@@ -530,7 +541,7 @@ export default function App() {
       avatar: "🐺", title: "Novice", banner: "void" 
     };
 
-    if (IS_OFFLINE) {
+    if (isOfflineMode) {
        setStats(initialStats);
        return;
     }
@@ -553,7 +564,7 @@ export default function App() {
     const newStats = { ...stats, ...updates };
     setStats(newStats);
 
-    if (IS_OFFLINE) return;
+    if (isOfflineMode) return;
 
     try {
       await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), newStats, { merge: true });
@@ -615,7 +626,7 @@ export default function App() {
     matchData.newSR = newStats.sr;
     matchData.xpGained = xpGained;
 
-    if (IS_OFFLINE) return;
+    if (isOfflineMode) return;
 
     try { 
       await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), newStats, { merge: true }); 
@@ -640,7 +651,7 @@ export default function App() {
     } else {
       // Fallback for browsers that don't support the Web Share API
       navigator.clipboard.writeText(window.location.href);
-      alert('Link copied to clipboard!');
+      // We avoid native alerts, relying on implicit OS feedback or just silent fallback 
     }
   };
 
@@ -660,7 +671,7 @@ export default function App() {
       
       {view !== 'GAME' && (
         <header className={`w-full p-4 flex flex-wrap justify-between items-center z-10 text-white gap-4 relative shadow-xl backdrop-blur-md banner-${stats.banner || 'void'} border-b border-white/10`}>
-          <div className="absolute inset-0 bg-slate-950/80 -z-10"></div>
+          <div className="absolute inset-0 bg-slate-950/80 -z-10 pointer-events-none"></div>
           
           <button 
             onClick={() => { playArcadeSound('click'); setView('MAIN_MENU'); }} 
@@ -773,7 +784,7 @@ function MainMenu({ onPlaySingle, onPlayMulti, onPlayLocal, onViewStats, onViewL
              <div className="w-14 h-14 bg-gradient-to-br from-rose-500 to-rose-800 text-white rounded-2xl flex items-center justify-center shadow-[0_0_20px_rgba(225,29,72,0.4)] group-hover:scale-110 transition-transform">
               <Globe size={28} />
              </div>
-             <div className="mt-auto text-left">
+             <div className="mt-auto text-left z-10">
                <h3 className="text-xl font-arcade font-black text-white tracking-widest mb-1">RANKED PVP</h3>
                <p className="text-slate-400 text-xs uppercase tracking-widest font-bold">Host & Join Online</p>
              </div>
@@ -784,7 +795,7 @@ function MainMenu({ onPlaySingle, onPlayMulti, onPlayLocal, onViewStats, onViewL
              <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-purple-800 text-white rounded-2xl flex items-center justify-center shadow-[0_0_20px_rgba(168,85,247,0.4)] group-hover:scale-110 transition-transform">
               <Swords size={28} />
              </div>
-             <div className="mt-auto text-left">
+             <div className="mt-auto text-left z-10">
                <h3 className="text-xl font-arcade font-black text-white tracking-widest mb-1">LOCAL DUEL</h3>
                <p className="text-slate-400 text-xs uppercase tracking-widest font-bold">Shared screen combat</p>
              </div>
@@ -827,7 +838,7 @@ function MainMenu({ onPlaySingle, onPlayMulti, onPlayLocal, onViewStats, onViewL
       </div>
 
       {/* --- SYSTEM ARCHITECT GRID --- */}
-      <div className="glass-panel p-6 mt-6 w-full max-w-2xl mx-auto border border-white/5 flex flex-col items-center justify-center text-center shadow-[0_0_20px_rgba(0,0,0,0.5)] relative overflow-hidden group">
+      <div className="glass-panel p-6 mt-6 w-full max-w-2xl mx-auto border border-white/5 flex flex-col items-center justify-center text-center shadow-[0_0_20px_rgba(0,0,0,0.5)] relative overflow-hidden group pointer-events-none">
         <div className="absolute inset-0 bg-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
         <div className="text-blue-400 font-arcade text-[10px] md:text-xs tracking-[0.2em] mb-2 uppercase font-bold relative z-10">System Architect</div>
         <div className="text-white font-arcade font-black text-xl md:text-2xl tracking-widest mb-3 uppercase drop-shadow-[0_0_10px_rgba(255,255,255,0.2)] relative z-10">
@@ -853,7 +864,7 @@ function ProfileScreen({ stats, onSave }) {
   return (
     <div className="flex-1 w-full max-w-4xl mx-auto animate-in slide-in-from-bottom-8 duration-500">
       <div className={`glass-panel border-t-4 border-t-blue-500 p-6 md:p-10 shadow-2xl banner-${selectedBanner} relative overflow-hidden`}>
-        <div className="absolute inset-0 bg-slate-950/60 z-0"></div>
+        <div className="absolute inset-0 bg-slate-950/60 z-0 pointer-events-none"></div>
         
         <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-8 mb-10 bg-slate-900/80 p-6 md:p-8 rounded-2xl border border-white/10 backdrop-blur-md shadow-xl">
           <div className={`w-28 h-28 text-6xl flex items-center justify-center rounded-3xl bg-slate-800 border-[3px] shadow-[0_0_30px_rgba(0,0,0,0.5)] ${rankInfo.bg} ${rankInfo.border} shrink-0`}>
@@ -917,9 +928,9 @@ function ProfileScreen({ stats, onSave }) {
                  const unlocked = i === 0 || (stats.bpLevel || 1) >= (i * 4);
                  return (
                  <button key={b} disabled={!unlocked} onClick={() => setSelectedBanner(b)} className={`h-24 rounded-xl border-2 transition-all banner-${b} relative overflow-hidden ${!unlocked ? 'opacity-40 cursor-not-allowed border-slate-800 grayscale' : selectedBanner === b ? 'border-white shadow-[0_0_20px_rgba(255,255,255,0.2)] scale-[1.02]' : 'border-slate-800 opacity-80 hover:opacity-100 hover:border-slate-600'}`}>
-                    <div className="absolute inset-0 bg-black/40"></div>
+                    <div className="absolute inset-0 bg-black/40 pointer-events-none"></div>
                     <span className="absolute bottom-2 left-2 bg-black/80 px-2.5 py-1 rounded text-[10px] font-arcade uppercase text-white tracking-widest border border-white/10 relative z-10">{b}</span>
-                    {!unlocked && <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20"><Lock size={24} className="text-white/50" /></div>}
+                    {!unlocked && <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 pointer-events-none"><Lock size={24} className="text-white/50" /></div>}
                  </button>
                )})}
              </div>
@@ -957,7 +968,7 @@ function TournamentsScreen() {
                </div>
             </div>
 
-            <div className="bg-slate-900/90 border border-white/5 p-6 rounded-2xl relative overflow-hidden flex flex-col opacity-60 grayscale hover:grayscale-0 transition-all shadow-lg">
+            <div className="bg-slate-900/90 border border-white/5 p-6 rounded-2xl relative overflow-hidden flex flex-col opacity-60 grayscale hover:grayscale-0 transition-all shadow-lg pointer-events-none">
                <h3 className="text-2xl font-arcade font-black text-cyan-400 mb-2 mt-2">SEASON 1 CHAMP</h3>
                <p className="text-slate-400 text-sm mb-6">Top 64 Legend Players</p>
                <div className="mt-auto border border-dashed border-slate-700 bg-slate-950 p-4 rounded-xl text-center">
@@ -965,7 +976,7 @@ function TournamentsScreen() {
                </div>
             </div>
 
-            <div className="bg-slate-900/90 border border-white/5 p-6 rounded-2xl relative overflow-hidden flex flex-col opacity-60 grayscale hover:grayscale-0 transition-all shadow-lg">
+            <div className="bg-slate-900/90 border border-white/5 p-6 rounded-2xl relative overflow-hidden flex flex-col opacity-60 grayscale hover:grayscale-0 transition-all shadow-lg pointer-events-none">
                <h3 className="text-2xl font-arcade font-black text-rose-400 mb-2 mt-2">GUILD WARS</h3>
                <p className="text-slate-400 text-sm mb-6">3v3 Synchronized Tugs</p>
                <div className="mt-auto border border-dashed border-slate-700 bg-slate-950 p-4 rounded-xl text-center">
@@ -1147,22 +1158,26 @@ function MultiplayerLobby({ user, currentConfig, onMatchReady }) {
   const hostedMatchIdRef = useRef(null); 
   const isMatchReadyRef = useRef(false);
 
+  // Check if offline
+  const isOfflineMode = firebaseConfig.apiKey === "dummy" || !firebaseConfig.apiKey;
+
   useEffect(() => {
     return () => { 
         if (unsubRef.current) unsubRef.current(); 
-        if (hostedMatchIdRef.current && !isMatchReadyRef.current && !IS_OFFLINE) {
+        if (hostedMatchIdRef.current && !isMatchReadyRef.current && !isOfflineMode) {
             updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', hostedMatchIdRef.current), { status: 'CANCELLED' }).catch(()=>{});
         }
     };
-  }, []);
+  }, [isOfflineMode]);
 
   const createMatch = async () => {
     playArcadeSound('click');
-    if (IS_OFFLINE) {
+    if (isOfflineMode) {
        setErrorMsg("Multiplayer requires Firebase Configuration.");
        return;
     }
     if (!user) return;
+    playArcadeSound('click');
     setStatus("HOSTING");
     const newMatchId = Math.floor(10000 + Math.random() * 90000).toString();
     hostedMatchIdRef.current = newMatchId;
@@ -1195,11 +1210,12 @@ function MultiplayerLobby({ user, currentConfig, onMatchReady }) {
 
   const joinMatch = async () => {
     playArcadeSound('click');
-    if (IS_OFFLINE) {
+    if (isOfflineMode) {
        setErrorMsg("Multiplayer requires Firebase Configuration.");
        return;
     }
     if (!user) return;
+    playArcadeSound('click');
     if (!matchIdInput || matchIdInput.length < 5) return;
     setStatus("JOINING");
     setErrorMsg("");
@@ -1269,7 +1285,7 @@ function MultiplayerLobby({ user, currentConfig, onMatchReady }) {
 }
 
 // --- CORE GAME ARENA ---
-function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpdated, onExit, matchContext }) {
+function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onExit, matchContext }) {
   const isMulti = mode === 'MULTI';
   const isLocal = mode === 'LOCAL';
   const matchId = matchContext?.matchId;
@@ -1301,7 +1317,7 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
   const hitStopRef = useRef(false);
   const [particles, setParticles] = useState([]);
 
-  const defaultKeys = ['1','2','3','4','5','6','7','8','9'];
+  const defaultKeys = ['7','8','9','4','5','6','1','2','3'];
   const [p1Keys, setP1Keys] = useState(defaultKeys);
   const [p2Keys, setP2Keys] = useState(defaultKeys);
 
@@ -1322,13 +1338,16 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
   const p2TimeoutLockRef = useRef(false);
   const submissionLockRef = useRef({ p1: false, p2: false });
   const gameInfoRef = useRef({ isMulti, matchId, playerSide });
+  
+  // Guard variable to prevent multiple sudden death transitions
+  const suddenDeathTriggered = useRef(false);
 
   useEffect(() => { gameInfoRef.current = { isMulti, matchId, playerSide }; }, [isMulti, matchId, playerSide]);
 
   useEffect(() => {
     const handleBeforeUnload = () => {
        const { isMulti, matchId, playerSide } = gameInfoRef.current;
-       if (isMulti && matchActive.current && matchId && !IS_OFFLINE) {
+       if (isMulti && matchActive.current && matchId) {
            const forfeitWinner = playerSide === 'p1' ? 'p2' : 'p1';
            const matchRef = doc(db, 'artifacts', appId, 'public', 'data', 'matches', matchId);
            updateDoc(matchRef, { status: 'FINISHED', winner: forfeitWinner }).catch(()=>{});
@@ -1340,7 +1359,7 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
       window.removeEventListener('beforeunload', handleBeforeUnload);
       isMounted.current = false; 
       const { isMulti, matchId, playerSide } = gameInfoRef.current;
-      if (isMulti && matchActive.current && matchId && !IS_OFFLINE) {
+      if (isMulti && matchActive.current && matchId) {
          const forfeitWinner = playerSide === 'p1' ? 'p2' : 'p1';
          const matchRef = doc(db, 'artifacts', appId, 'public', 'data', 'matches', matchId);
          updateDoc(matchRef, { status: 'FINISHED', winner: forfeitWinner }).catch(()=>{});
@@ -1468,7 +1487,7 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
         if (opponentSide === 'p1') setP1State(prev => ({...prev, hasShield: false}));
         else setP2State(prev => ({...prev, hasShield: false}));
 
-        if (isMulti && matchId && !IS_OFFLINE) {
+        if (isMulti && matchId) {
             const opponentNetworkSide = playerSide === 'p1' ? 'p2' : 'p1';
             const matchRef = doc(db, 'artifacts', appId, 'public', 'data', 'matches', matchId);
             try { updateDoc(matchRef, { [`${opponentNetworkSide}Shield`]: false }); } catch (e) {}
@@ -1481,7 +1500,7 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
     localForces.current[side] += forceAmount; 
     targetRopeRef.current += directionalForce;
 
-    if (isMulti && matchId && !IS_OFFLINE) {
+    if (isMulti && matchId) {
        const targetNetworkSide = side === 'p1' ? playerSide : (playerSide === 'p1' ? 'p2' : 'p1');
        const matchRef = doc(db, 'artifacts', appId, 'public', 'data', 'matches', matchId);
        const updateField = targetNetworkSide === 'p1' ? 'p1Force' : 'p2Force';
@@ -1529,12 +1548,12 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
             setDangerZone(prev => prev !== null ? null : prev);
         }
 
-        // Horizontal Physical Tug Logic Restored
+        // Horizontal Physical Tug Logic Restored - Fixed Jitter with translate3d
         if (tugContainerRef.current) {
           const isMobile = window.innerWidth < 1024;
           const multiplier = isMobile ? 6 : 15;
           let movePixels = -(currentX * multiplier);
-          tugContainerRef.current.style.transform = `translateX(${movePixels}px)`;
+          tugContainerRef.current.style.transform = `translate3d(${movePixels}px, 0, 0)`;
         }
 
         if (config.specialMode === 'SPEED_RUSH' && (phase === 'PLAYING' || phase === 'SUDDEN_DEATH')) {
@@ -1648,7 +1667,7 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
         }
     };
 
-    if (isMulti && matchId && !IS_OFFLINE) {
+    if (isMulti && matchId) {
         const attackerNetworkSide = attackerSide === 'p1' ? playerSide : (playerSide === 'p1' ? 'p2' : 'p1');
         const targetNetworkSide = attackerNetworkSide === 'p1' ? 'p2' : 'p1';
         
@@ -1705,7 +1724,7 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
             spawnFloatingText("FATAL ERROR!", side, true);
             setTimeout(() => { if (isMounted.current) finalizeMatch(side !== 'p1', side !== 'p1' ? 'p2' : 'p1'); }, 1500);
             
-            if (isMulti && matchId && !IS_OFFLINE) {
+            if (isMulti && matchId) {
                 const errNetworkSide = side === 'p1' ? playerSide : (playerSide === 'p1' ? 'p2' : 'p1');
                 const winner = errNetworkSide === 'p1' ? 'p2' : 'p1';
                 updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', matchId), { status: 'FINISHED', winner }).catch(()=>{});
@@ -1739,7 +1758,7 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
     if (currentState.hasDouble) {
         baseForce *= 2;
         setState(prev => ({...prev, hasDouble: false}));
-        if (isMulti && matchId && !IS_OFFLINE) {
+        if (isMulti && matchId) {
             const uiNetworkSide = side === 'p1' ? playerSide : (playerSide === 'p1' ? 'p2' : 'p1');
             updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', matchId), { [`${uiNetworkSide}Double`]: false }).catch(()=>{});
         }
@@ -1841,14 +1860,18 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
   }, [phase]);
 
   useEffect(() => {
+    // Only process Sudden Death trigger if we are actively playing and time hits 0
     if (phase !== 'PLAYING' || !matchActive.current || timeLeft > 0) return;
     
     if (targetRopeRef.current === 0) {
-        setPhase('SUDDEN_DEATH');
-        playArcadeSound('alarm');
-        triggerHitStop();
-        spawnFloatingText("SUDDEN DEATH!", 'p1', true);
-        spawnFloatingText("SUDDEN DEATH!", 'p2', true);
+        if (!suddenDeathTriggered.current) {
+            suddenDeathTriggered.current = true;
+            setPhase('SUDDEN_DEATH');
+            playArcadeSound('alarm');
+            triggerHitStop();
+            spawnFloatingText("SUDDEN DEATH!", 'p1', true);
+            spawnFloatingText("SUDDEN DEATH!", 'p2', true);
+        }
         return;
     }
     
@@ -1856,7 +1879,7 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
     
     if (isMulti) {
         matchActive.current = false; 
-        if (playerSide === 'p1' && !hasFinalizedRef.current && !IS_OFFLINE) {
+        if (playerSide === 'p1' && !hasFinalizedRef.current) {
             const winner = finalRope > 0 ? 'p1' : (finalRope < 0 ? 'p2' : 'tie');
             const matchRef = doc(db, 'artifacts', appId, 'public', 'data', 'matches', matchId);
             updateDoc(matchRef, { status: 'FINISHED', winner }).catch(console.error);
@@ -1871,10 +1894,10 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
             else setTimeout(() => { if(isMounted.current) finalizeMatch(false, 'tie'); }, 1500);
         }
     }
-  }, [timeLeft, phase, finalizeMatch, triggerHitStop, spawnFloatingText, playerSide, isMulti, matchId, db]);
+  }, [timeLeft, phase, finalizeMatch, triggerHitStop, spawnFloatingText, playerSide, isMulti, matchId]);
 
   useEffect(() => {
-    if (!user || !isMulti || !matchId || IS_OFFLINE) return;
+    if (!user || !isMulti || !matchId) return;
     const matchRef = doc(db, 'artifacts', appId, 'public', 'data', 'matches', matchId);
     
     const unsub = onSnapshot(matchRef, (snap) => {
@@ -2099,30 +2122,40 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
   useEffect(() => {
     if ((phase !== 'PLAYING' && phase !== 'SUDDEN_DEATH')) return; 
     const handleKeyDown = (e) => {
-      if (e.code === 'Space') {
-         e.preventDefault();
-         if (p1StateRef.current.readyPowerUp) activatePowerUp('p1');
-         return;
-      }
-      
-      if (e.code === 'NumpadEnter' && isLocal && p2StateRef.current.readyPowerUp) {
-          e.preventDefault();
-          activatePowerUp('p2');
-          return;
-      }
-      
-      const isNumpad = e.code.startsWith('Numpad');
+      if (e.repeat) return; // Ignore hold repetition
+      const code = e.code;
+      const key = e.key.toLowerCase();
 
-      if (!isLocal || (!isNumpad && e.key !== 'Delete')) {
-          if (e.key === 'Enter') handleKeyPad('ENTER', 'p1');
-          else if (e.key === 'Backspace') handleKeyPad('DEL', 'p1');
-          else if (/[0-9]/.test(e.key)) handleKeyPad(e.key, 'p1');
-      }
-      
-      if (isLocal && (isNumpad || e.key === 'Delete')) {
-          if (e.code === 'NumpadEnter') handleKeyPad('ENTER', 'p2');
-          else if (e.key === 'Delete' || e.code === 'NumpadSubtract') handleKeyPad('DEL', 'p2');
-          else if (/[0-9]/.test(e.key)) handleKeyPad(e.key, 'p2');
+      if (isLocal) {
+          // P1 Letter mapping (Left)
+          const p1Map = {'q':'7','w':'8','e':'9','a':'4','s':'5','d':'6','z':'1','x':'2','c':'3','v':'0','r':'ENTER','f':'DEL'};
+          // P2 Letter mapping (Right)
+          const p2Map = {'u':'7','i':'8','o':'9','j':'4','k':'5','l':'6','m':'1',',':'2','.':'3','n':'0','p':'ENTER','h':'DEL'};
+
+          // Powerups mapping
+          if (code === 'Space') { e.preventDefault(); activatePowerUp('p1'); return; }
+          if (code === 'Enter') { 
+              e.preventDefault(); 
+              if (p2StateRef.current.readyPowerUp) activatePowerUp('p2'); 
+              return; 
+          }
+
+          if (p1Map[key]) handleKeyPad(p1Map[key], 'p1');
+          if (p2Map[key]) handleKeyPad(p2Map[key], 'p2');
+          
+          // Allow Numpad specific keys to also drive P2 strictly (Classic method)
+          if (code.startsWith('Numpad')) {
+              const n = code.replace('Numpad', '');
+              if (n === 'Enter') handleKeyPad('ENTER', 'p2');
+              else if (n === 'Subtract' || n === 'Decimal') handleKeyPad('DEL', 'p2');
+              else if (/[0-9]/.test(n)) handleKeyPad(n, 'p2');
+          }
+      } else {
+          // Single / Network Player uses spacebar, enter, backspace and standard nums
+          if (code === 'Space') { e.preventDefault(); activatePowerUp('p1'); return; }
+          if (key === 'enter') handleKeyPad('ENTER', 'p1');
+          else if (key === 'backspace' || key === 'delete') handleKeyPad('DEL', 'p1');
+          else if (/[0-9]/.test(key)) handleKeyPad(key, 'p1');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -2230,19 +2263,16 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
       {/* Main Gameplay Area */}
       <div className="absolute top-[72px] bottom-0 left-0 right-0 flex flex-col lg:flex-row lg:items-center overflow-hidden gap-1 lg:gap-0">
          
-         {/* P1 Section - Takes 60% on Mobile (Single/Multi) or 42% on Local Mobile */}
+         {/* P1 Section */}
          <div className={`w-full lg:w-1/3 flex flex-col px-2 md:px-8 relative justify-center
             ${isLocal ? 'order-3 lg:order-1 h-[42%] lg:h-full' : 'order-2 lg:order-1 h-[60%] lg:h-full'}
             ${p1State.isFrozen ? 'frozen-ui' : p1State.isJammed ? 'jammed-ui' : ''} ${p1State.hasShield ? 'shield-aura border border-emerald-500 rounded-2xl' : ''} ${p1State.hasDouble ? 'double-aura border border-yellow-500 rounded-2xl' : ''} ${p1State.streak >= 3 && !p1State.hasShield && !p1State.hasDouble ? 'neon-blue-border bg-blue-900/10 rounded-2xl' : ''}`}>
             
-            {/* Floating Combat Text */}
             {floatingTexts.filter(ft => ft.side === 'p1').map(ft => (
               <div key={ft.id} className={`absolute top-0 left-1/2 -translate-x-1/2 text-2xl md:text-4xl font-arcade font-black drop-shadow-xl z-20 pointer-events-none ${ft.isPerfect ? 'animate-perfect' : ft.isCombo ? 'animate-float text-yellow-400 drop-shadow-[0_0_15px_#facc15]' : 'animate-float text-blue-400'}`}>{ft.text}</div>
             ))}
 
-            {/* Central Problem Display */}
             <div className="flex-1 flex flex-col justify-center items-center relative z-10 w-full max-w-md mx-auto py-1 md:py-4">
-              
                <div className="flex justify-between items-center w-full mb-1 md:mb-4 px-2">
                   <div className="flex gap-1.5">
                      {[...Array(3)].map((_, i) => (
@@ -2252,7 +2282,7 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
                </div>
 
                <div className={`text-2xl md:text-5xl lg:text-6xl font-arcade font-black text-blue-100 tracking-wider mb-2 md:mb-6 text-center ${p1State.isJammed ? 'jammed-text' : ''} drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]`}>
-                  {(phase === 'PLAYING' || phase === 'SUDDEN_DEATH') ? (p1State.isFrozen ? 'SYS.LOCK' : p1State.isJammed ? 'E##OR' : p1State.problem?.question) : 'AWAITING'}
+                 {(phase === 'PLAYING' || phase === 'SUDDEN_DEATH') ? (p1State.isFrozen ? 'SYS.LOCK' : p1State.isJammed ? 'E##OR' : p1State.problem?.question) : 'AWAITING'}
                </div>
                
                <div className="w-full relative mb-2 md:mb-8">
@@ -2266,7 +2296,6 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
                  )}
                </div>
 
-               {/* Enhanced Keypad Container */}
                <div className="w-full flex gap-2 md:gap-6">
                   {/* Powerup Circle Left */}
                   <div className="flex flex-col items-center justify-end pb-1 md:pb-4">
@@ -2277,34 +2306,44 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
                      {p1State.readyPowerUp && <div className="text-[6px] md:text-[8px] text-blue-300 font-bold tracking-widest mt-1 md:mt-2 animate-pulse">SPACEBAR</div>}
                   </div>
 
-                  {/* Keypad */}
+                  {/* P1 Keypad */}
                   <div className="flex-1 grid grid-cols-3 gap-1 md:gap-3 bg-slate-900/60 p-2 md:p-4 rounded-2xl md:rounded-3xl border border-white/5 shadow-2xl backdrop-blur-md">
                     {p1Keys.map(num => (
-                      <button key={num} onClick={() => handleKeyPad(num, 'p1')} className="btn-mech btn-mech-gray text-xl md:text-3xl font-arcade font-black py-2 md:py-6">{num}</button>
+                      <button key={num} onClick={() => handleKeyPad(num, 'p1')} className="btn-mech btn-mech-gray text-xl md:text-3xl font-arcade font-black py-2 md:py-6 relative">
+                        {num}
+                        {isLocal && <span className="absolute top-1 left-2 text-[8px] md:text-[10px] text-slate-400 opacity-70">{P1_SHORTCUTS[num]}</span>}
+                      </button>
                     ))}
-                    <button onClick={() => handleKeyPad('DEL', 'p1')} className="btn-mech btn-mech-red text-xl md:text-3xl font-arcade font-black py-2 md:py-6 flex justify-center items-center"><X strokeWidth={4} size={20} className="md:w-8 md:h-8" /></button>
-                    <button onClick={() => handleKeyPad('0', 'p1')} className="btn-mech btn-mech-gray text-xl md:text-3xl font-arcade font-black py-2 md:py-6">0</button>
-                    <button onClick={() => handleKeyPad('ENTER', 'p1')} className="btn-mech btn-mech-blue text-xl md:text-3xl font-arcade font-black py-2 md:py-6 flex justify-center items-center"><Check strokeWidth={5} size={20} className="md:w-8 md:h-8" /></button>
+                    <button onClick={() => handleKeyPad('DEL', 'p1')} className="btn-mech btn-mech-red text-xl md:text-3xl font-arcade font-black py-2 md:py-6 flex justify-center items-center relative">
+                      <X strokeWidth={4} size={20} className="md:w-8 md:h-8" />
+                      {isLocal && <span className="absolute top-1 left-2 text-[8px] md:text-[10px] text-slate-300 opacity-70">{P1_SHORTCUTS['DEL']}</span>}
+                    </button>
+                    <button onClick={() => handleKeyPad('0', 'p1')} className="btn-mech btn-mech-gray text-xl md:text-3xl font-arcade font-black py-2 md:py-6 relative">
+                      0
+                      {isLocal && <span className="absolute top-1 left-2 text-[8px] md:text-[10px] text-slate-400 opacity-70">{P1_SHORTCUTS['0']}</span>}
+                    </button>
+                    <button onClick={() => handleKeyPad('ENTER', 'p1')} className="btn-mech btn-mech-blue text-xl md:text-3xl font-arcade font-black py-2 md:py-6 flex justify-center items-center relative">
+                      <Check strokeWidth={5} size={20} className="md:w-8 md:h-8" />
+                      {isLocal && <span className="absolute top-1 left-2 text-[8px] md:text-[10px] text-slate-300 opacity-70">{P1_SHORTCUTS['ENTER']}</span>}
+                    </button>
                   </div>
                </div>
             </div>
          </div>
 
-         {/* Middle Horizontal Tug Visuals - Takes 40% (Single/Multi) or 16% (Local) */}
+         {/* Middle Horizontal Tug Visuals */}
          <div className={`w-full lg:w-1/3 flex flex-col items-center justify-center relative z-0 overflow-hidden
             ${isLocal ? 'order-2 h-[16%] lg:h-full' : 'order-1 lg:order-2 h-[40%] lg:h-full'}
          `}>
-            <div className="w-full relative flex items-center justify-center">
+            <div className="w-full relative flex items-center justify-center pointer-events-none">
               <div className="absolute h-full w-[2px] border-l-2 border-dashed border-white/20 top-0 hidden lg:block"></div>
               
               <div ref={tugContainerRef} className="relative w-[200%] md:w-[150%] flex items-center justify-center transition-transform">
                 
-                {/* P1 Avatar on Rope (MIRROR FIX) */}
                 <div className={`text-[4rem] md:text-[6rem] lg:text-[7rem] z-10 drop-shadow-2xl transition-all duration-100 ${p1State.streak >= 3 ? 'scale-110 drop-shadow-[0_0_20px_rgba(59,130,246,0.8)]' : ''} ${p1State.error ? 'scale-75 opacity-50' : 'avatar-float'}`}>
                   <div className="transform scale-x-[-1]">{getAvatar('p1')}</div>
                 </div>
                 
-                {/* Connecting Rope & Marker */}
                 <div className={`h-2 md:h-4 w-32 md:w-64 rounded-full relative flex items-center justify-center z-0 transition-colors mx-2 md:mx-4 ${Math.abs(targetRopeRef.current) > 10 ? 'bg-white shadow-[0_0_20px_white]' : 'bg-slate-800'}`}>
                   <div className="absolute w-full h-full rounded-full overflow-hidden">
                     <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.2),transparent)] animate-pulse"></div>
@@ -2317,7 +2356,6 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
                   </div>
                 </div>
 
-                {/* P2 Avatar on Rope */}
                 <div className={`text-[4rem] md:text-[6rem] lg:text-[7rem] z-10 drop-shadow-2xl transition-all duration-100 ${p2State.streak >= 3 ? 'scale-110 drop-shadow-[0_0_20px_rgba(225,29,72,0.8)]' : ''} ${p2State.error ? 'scale-75 opacity-50' : 'avatar-float'}`}>
                   {getAvatar('p2')}
                 </div>
@@ -2325,19 +2363,17 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
             </div>
          </div>
 
-         {/* P2 Section - Hidden on Mobile if NOT Local, Takes 42% inverted if Local */}
+         {/* P2 Section */}
          <div className={`w-full lg:w-1/3 flex flex-col px-2 md:px-8 relative justify-center
             ${!isLocal ? 'hidden lg:flex lg:h-full' : 'flex h-[42%] lg:h-full'}
             ${isLocal ? 'order-1 lg:order-3 rotate-180 lg:rotate-0' : 'order-3'}
             ${p2State.isFrozen ? 'frozen-ui' : p2State.isJammed ? 'jammed-ui' : ''} ${p2State.hasShield ? 'shield-aura border border-emerald-500 rounded-2xl' : ''} ${p2State.hasDouble ? 'double-aura border border-yellow-500 rounded-2xl' : ''} ${p2State.streak >= 3 && !p2State.hasShield && !p2State.hasDouble ? 'neon-red-border bg-rose-900/10 rounded-2xl' : ''}`}>
             
-            {/* Floating Combat Text */}
             {floatingTexts.filter(ft => ft.side === 'p2').map(ft => (
               <div key={ft.id} className={`absolute top-0 left-1/2 -translate-x-1/2 text-2xl md:text-4xl font-arcade font-black drop-shadow-xl z-20 pointer-events-none ${ft.isPerfect ? 'animate-perfect' : ft.isCombo ? 'animate-float text-yellow-400 drop-shadow-[0_0_15px_#facc15]' : 'animate-float text-rose-400'}`}>{ft.text}</div>
             ))}
 
             <div className="flex-1 flex flex-col justify-center items-center relative z-10 w-full max-w-md mx-auto py-1 md:py-4">
-              
                <div className="flex justify-between items-center w-full mb-1 md:mb-4 px-2 flex-row-reverse">
                   <div className="flex gap-1.5 flex-row-reverse">
                      {[...Array(3)].map((_, i) => (
@@ -2347,7 +2383,7 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
                </div>
 
                <div className={`text-2xl md:text-5xl lg:text-6xl font-arcade font-black text-rose-100 tracking-wider mb-2 md:mb-6 text-center ${p2State.isJammed ? 'jammed-text' : ''} drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]`}>
-                  {(phase === 'PLAYING' || phase === 'SUDDEN_DEATH') ? (isLocal ? (p2State.isFrozen ? 'SYS.LOCK' : p2State.isJammed ? 'E##OR' : p2State.problem?.question) : '***') : 'AWAITING'}
+                 {(phase === 'PLAYING' || phase === 'SUDDEN_DEATH') ? (isLocal ? (p2State.isFrozen ? 'SYS.LOCK' : p2State.isJammed ? 'E##OR' : p2State.problem?.question) : '***') : 'AWAITING'}
                </div>
                
                <div className="w-full relative mb-2 md:mb-8">
@@ -2368,23 +2404,33 @@ function MatchArena({ mode, config, user, playerProfile, onMatchEnd, onStateUpda
                         <div className={`w-full transition-all duration-300 ${p2State.readyPowerUp ? 'bg-yellow-400 animate-pulse shadow-[0_0_15px_#eab308]' : 'bg-rose-500 shadow-[0_0_15px_#ef4444]'}`} style={{ height: `${p2State.meter}%` }} />
                      </div>
                      {renderPowerUpBtn(p2State, 'p2')}
-                     {p2State.readyPowerUp && isLocal && <div className="text-[6px] md:text-[8px] text-rose-300 font-bold tracking-widest mt-1 md:mt-2 animate-pulse">NUM PAD ENT</div>}
+                     {p2State.readyPowerUp && isLocal && <div className="text-[6px] md:text-[8px] text-rose-300 font-bold tracking-widest mt-1 md:mt-2 animate-pulse">ENTER</div>}
                   </div>
 
-                  {/* Keypad */}
+                  {/* P2 Keypad */}
                   <div className="flex-1 grid grid-cols-3 gap-1 md:gap-3 bg-slate-900/60 p-2 md:p-4 rounded-2xl md:rounded-3xl border border-white/5 shadow-2xl backdrop-blur-md">
                     {p2Keys.map(num => (
-                      <button key={num} onClick={() => handleKeyPad(num, 'p2')} className="btn-mech btn-mech-gray text-xl md:text-3xl font-arcade font-black py-2 md:py-6">{num}</button>
+                      <button key={num} onClick={() => handleKeyPad(num, 'p2')} className="btn-mech btn-mech-gray text-xl md:text-3xl font-arcade font-black py-2 md:py-6 relative">
+                        {num}
+                        {isLocal && <span className="absolute top-1 left-2 text-[8px] md:text-[10px] text-slate-400 opacity-70">{P2_SHORTCUTS[num]}</span>}
+                      </button>
                     ))}
-                    <button onClick={() => handleKeyPad('DEL', 'p2')} className="btn-mech btn-mech-red text-xl md:text-3xl font-arcade font-black py-2 md:py-6 flex justify-center items-center"><X strokeWidth={4} size={20} className="md:w-8 md:h-8" /></button>
-                    <button onClick={() => handleKeyPad('0', 'p2')} className="btn-mech btn-mech-gray text-xl md:text-3xl font-arcade font-black py-2 md:py-6">0</button>
-                    <button onClick={() => handleKeyPad('ENTER', 'p2')} className="btn-mech btn-mech-red text-xl md:text-3xl font-arcade font-black py-2 md:py-6 flex justify-center items-center"><Check strokeWidth={5} size={20} className="md:w-8 md:h-8" /></button>
+                    <button onClick={() => handleKeyPad('DEL', 'p2')} className="btn-mech btn-mech-red text-xl md:text-3xl font-arcade font-black py-2 md:py-6 flex justify-center items-center relative">
+                      <X strokeWidth={4} size={20} className="md:w-8 md:h-8" />
+                      {isLocal && <span className="absolute top-1 left-2 text-[8px] md:text-[10px] text-slate-300 opacity-70">{P2_SHORTCUTS['DEL']}</span>}
+                    </button>
+                    <button onClick={() => handleKeyPad('0', 'p2')} className="btn-mech btn-mech-gray text-xl md:text-3xl font-arcade font-black py-2 md:py-6 relative">
+                      0
+                      {isLocal && <span className="absolute top-1 left-2 text-[8px] md:text-[10px] text-slate-400 opacity-70">{P2_SHORTCUTS['0']}</span>}
+                    </button>
+                    <button onClick={() => handleKeyPad('ENTER', 'p2')} className="btn-mech btn-mech-red text-xl md:text-3xl font-arcade font-black py-2 md:py-6 flex justify-center items-center relative">
+                      <Check strokeWidth={5} size={20} className="md:w-8 md:h-8" />
+                      {isLocal && <span className="absolute top-1 left-2 text-[8px] md:text-[10px] text-slate-300 opacity-70">{P2_SHORTCUTS['ENTER']}</span>}
+                    </button>
                   </div>
                </div>
-
             </div>
          </div>
-
       </div>
     </div>
   );
@@ -2442,7 +2488,7 @@ function ResultsScreen({ onBack }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center w-full max-w-2xl mx-auto animate-in zoom-in duration-500">
       <div className={`glass-panel border-t-8 ${borderCol} p-8 md:p-14 w-full text-center relative overflow-hidden`}>
-        <div className="absolute inset-0 bg-slate-950/80 -z-10"></div>
+        <div className="absolute inset-0 bg-slate-950/80 -z-10 pointer-events-none"></div>
         
         <h2 className={`text-6xl md:text-7xl font-arcade font-black tracking-widest mb-4 z-10 relative ${isTie ? 'text-slate-300 drop-shadow-[0_0_20px_#cbd5e1]' : data.won || (isLocal && data.localWinner === 'p1') ? 'text-blue-400 drop-shadow-[0_0_20px_#3b82f6]' : 'text-rose-400 drop-shadow-[0_0_20px_#ef4444]'}`}>{title}</h2>
         <p className="text-slate-400 font-bold mb-12 text-sm uppercase tracking-widest relative z-10">{data.won || isLocal || isTie ? 'Combat Scenario Concluded' : 'Analyze failure and retry'}</p>
@@ -2489,7 +2535,7 @@ function AnalyticsDashboard({ stats }) {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-12">
           <div className="bg-slate-900/80 p-6 rounded-2xl border border-white/5 text-center shadow-lg hover:border-blue-500/50 transition-colors"><p className="text-xs font-arcade text-blue-400 uppercase tracking-widest mb-3">ACCURACY</p><p className="text-4xl font-arcade font-black text-white">{Math.round(globalAcc)}%</p></div>
           <div className="bg-slate-900/80 p-6 rounded-2xl border border-white/5 text-center shadow-lg hover:border-purple-500/50 transition-colors"><p className="text-xs font-arcade text-purple-400 uppercase tracking-widest mb-3">ENGAGEMENTS</p><p className="text-4xl font-arcade font-black text-white">{stats.totalGames}</p></div>
-          <div className={`col-span-2 p-6 rounded-2xl border text-center ${currentRank.bg} border-white/10 shadow-lg relative overflow-hidden`}><div className="absolute inset-0 bg-white/5"></div><p className="text-xs font-arcade text-slate-300 uppercase tracking-widest mb-3 relative z-10">RANK TIER</p><p className={`text-4xl font-arcade font-black ${currentRank.color} drop-shadow-md relative z-10`}>{currentRank.name} <span className="text-2xl text-slate-400">/ {stats.sr || 0} SR</span></p></div>
+          <div className={`col-span-2 p-6 rounded-2xl border text-center ${currentRank.bg} border-white/10 shadow-lg relative overflow-hidden`}><div className="absolute inset-0 bg-white/5 pointer-events-none"></div><p className="text-xs font-arcade text-slate-300 uppercase tracking-widest mb-3 relative z-10">RANK TIER</p><p className={`text-4xl font-arcade font-black ${currentRank.color} drop-shadow-md relative z-10`}>{currentRank.name} <span className="text-2xl text-slate-400">/ {stats.sr || 0} SR</span></p></div>
         </div>
 
         <h3 className="text-sm font-arcade text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2"><TrendingUp size={16}/> TACTICAL MASTERY</h3>
@@ -2527,7 +2573,8 @@ function GlobalLeaderboard({ user }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (IS_OFFLINE) {
+    const isOfflineMode = firebaseConfig.apiKey === "dummy" || !firebaseConfig.apiKey;
+    if (isOfflineMode) {
       setLeaders([]);
       setLoading(false);
       return;
@@ -2577,7 +2624,7 @@ function GlobalLeaderboard({ user }) {
               <div className="flex justify-center py-16"><RefreshCw className="w-10 h-10 animate-spin text-yellow-500" /></div>
             ) : leaders.length === 0 ? (
               <div className="text-center py-16 font-arcade text-slate-500 tracking-widest text-sm bg-slate-900/30">
-                 {IS_OFFLINE ? "LEADERBOARD OFFLINE. ADD FIREBASE CONFIG." : "No intelligence found."}
+                 {firebaseConfig.apiKey === "dummy" ? "LEADERBOARD OFFLINE. ADD FIREBASE CONFIG." : "No intelligence found."}
               </div>
             ) : (
               leaders.map((leader, index) => {
