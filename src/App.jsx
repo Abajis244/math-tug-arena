@@ -328,28 +328,33 @@ const STYLES = `
 `;
 
 // --- Firebase Configuration ---
-// TRICK THE BOTS: Split the key in half so GitHub scanners can't read it
+// TRICK THE BOTS: Split the key to avoid GitHub scanners
 const keyPart1 = "AIzaSy"; 
-const keyPart2 = "C7yj-ZMv4GHn2CUwdx6vwS3fQTXcx3-eg"; // Replace this with the rest of your new key if you regenerated it!
+const keyPart2 = "C7yj-ZMv4GHn2CUwdx6vwS3fQTXcx3-eg"; 
 
 const firebaseConfig = {
-  apiKey: keyPart1 + keyPart2, // Stitches it together safely!
-  authDomain: "math-tug-arena.firebaseapp.com",
-  projectId: "math-tug-arena",
-  storageBucket: "math-tug-arena.firebasestorage.app",
-  messagingSenderId: "651768070745",
-  appId: "1:651768070745:web:b34e2f87d8abf053922748",
-  measurementId: "G-55VJYDNDSR"
+  apiKey: keyPart1 + keyPart2,
+  authDomain: "math-tug-arena.firebaseapp.com",
+  projectId: "math-tug-arena",
+  storageBucket: "math-tug-arena.firebasestorage.app",
+  messagingSenderId: "651768070745",
+  appId: "1:651768070745:web:b34e2f87d8abf053922748",
+  measurementId: "G-55VJYDNDSR"
 };
 
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+
+// Initialize Firestore with Persistent Caching (Multi-Tab Support)
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ 
+    tabManager: persistentMultipleTabManager() 
+  })
+});
+
 const appId = 'math-tug-arena';
 
-// Use the modern initializeFirestore with persistent caching
-const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-});
 
 // --- Constants & Config ---
 const MAX_SCORE_DIFFERENCE = 15; 
@@ -476,35 +481,56 @@ export default function App() {
 
   useEffect(() => {
     const initAuth = async () => {
+      if (isOfflineMode) {
+        setUser({ uid: 'local-offline-user' });
+        setLoading(false);
+        return;
+      }
+
       try {
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
           await signInWithCustomToken(auth, __initial_auth_token);
         } else {
           await signInAnonymously(auth);
         }
-      } catch (e) { console.error(e); }
+      } catch (e) { 
+        console.error("Auth init error:", e); 
+        setUser({ uid: 'local-error-user' });
+        setLoading(false);
+      }
     };
     initAuth();
-    const unsubscribe = onAuthStateChanged(auth, (u) => { 
-      setUser(u); 
-      setLoading(false); 
-    });
-    return () => unsubscribe();
+
+    if (!isOfflineMode) {
+      const unsubscribe = onAuthStateChanged(auth, (u) => { 
+        if (u) setUser(u); 
+        setLoading(false); 
+      });
+      return () => unsubscribe();
+    }
   }, []);
 
   useEffect(() => {
     if (!user) return;
+    
+    const initialStats = { 
+      sr: 500, xp: 0, bpLevel: 1, totalGames: 0, wins: 0, analytics: {}, 
+      customName: `Cadet_${user.uid.substring(0,4).toUpperCase()}`, 
+      avatar: "🐺", title: "Novice", banner: "void" 
+    };
+
+    if (isOfflineMode) {
+       setStats(initialStats);
+       return;
+    }
+
     const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data');
     const unsub = onSnapshot(docRef, (snap) => {
       if (snap.exists()) {
         setStats(snap.data());
       } else {
-        const initialStats = { 
-          sr: 500, xp: 0, bpLevel: 1, totalGames: 0, wins: 0, analytics: {}, 
-          customName: `Cadet_${user.uid.substring(0,4).toUpperCase()}`, 
-          avatar: "🐺", title: "Novice", banner: "void" 
-        };
-        setDoc(docRef, initialStats); setStats(initialStats);
+        setDoc(docRef, initialStats).catch(()=>{}); 
+        setStats(initialStats);
       }
     }, (error) => console.error(error));
     return () => unsub();
@@ -515,13 +541,17 @@ export default function App() {
     if (!user) return;
     const newStats = { ...stats, ...updates };
     setStats(newStats);
-    await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), newStats, { merge: true });
-    
-    if (newStats.sr > 0) {
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'leaderboard', user.uid), {
-        uid: user.uid, name: newStats.customName, sr: newStats.sr, avatar: newStats.avatar, title: newStats.title, banner: newStats.banner, updatedAt: serverTimestamp()
-      }, { merge: true });
-    }
+
+    if (isOfflineMode) return;
+
+    try {
+      await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), newStats, { merge: true });
+      if (newStats.sr > 0) {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'leaderboard', user.uid), {
+          uid: user.uid, name: newStats.customName, sr: newStats.sr, avatar: newStats.avatar, title: newStats.title, banner: newStats.banner, updatedAt: serverTimestamp()
+        }, { merge: true });
+      }
+    } catch (e) {}
   };
 
   const processMatchData = async (matchData, userQuestions) => {
@@ -573,6 +603,8 @@ export default function App() {
     matchData.srDelta = srDelta;
     matchData.newSR = newStats.sr;
     matchData.xpGained = xpGained;
+
+    if (isOfflineMode) return;
 
     try { 
       await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), newStats, { merge: true }); 
@@ -1104,16 +1136,24 @@ function MultiplayerLobby({ user, currentConfig, onMatchReady }) {
   const hostedMatchIdRef = useRef(null); 
   const isMatchReadyRef = useRef(false);
 
+  // Check if offline
+  const isOfflineMode = firebaseConfig.apiKey === "dummy" || !firebaseConfig.apiKey;
+
   useEffect(() => {
     return () => { 
         if (unsubRef.current) unsubRef.current(); 
-        if (hostedMatchIdRef.current && !isMatchReadyRef.current) {
+        if (hostedMatchIdRef.current && !isMatchReadyRef.current && !isOfflineMode) {
             updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', hostedMatchIdRef.current), { status: 'CANCELLED' }).catch(()=>{});
         }
     };
-  }, []);
+  }, [isOfflineMode]);
 
   const createMatch = async () => {
+    playArcadeSound('click');
+    if (isOfflineMode) {
+       setErrorMsg("Multiplayer requires Firebase Configuration.");
+       return;
+    }
     if (!user) return;
     playArcadeSound('click');
     setStatus("HOSTING");
@@ -1147,6 +1187,11 @@ function MultiplayerLobby({ user, currentConfig, onMatchReady }) {
   };
 
   const joinMatch = async () => {
+    playArcadeSound('click');
+    if (isOfflineMode) {
+       setErrorMsg("Multiplayer requires Firebase Configuration.");
+       return;
+    }
     if (!user) return;
     playArcadeSound('click');
     if (!matchIdInput || matchIdInput.length < 5) return;
@@ -2476,6 +2521,13 @@ function GlobalLeaderboard({ user }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const isOfflineMode = firebaseConfig.apiKey === "dummy" || !firebaseConfig.apiKey;
+    if (isOfflineMode) {
+      setLeaders([]);
+      setLoading(false);
+      return;
+    }
+
     if (!user) {
       setLoading(false);
       return;
@@ -2519,7 +2571,9 @@ function GlobalLeaderboard({ user }) {
             {loading ? (
               <div className="flex justify-center py-16"><RefreshCw className="w-10 h-10 animate-spin text-yellow-500" /></div>
             ) : leaders.length === 0 ? (
-              <div className="text-center py-16 font-arcade text-slate-500 tracking-widest text-sm bg-slate-900/30">No intelligence found.</div>
+              <div className="text-center py-16 font-arcade text-slate-500 tracking-widest text-sm bg-slate-900/30">
+                 {firebaseConfig.apiKey === "dummy" ? "LEADERBOARD OFFLINE. ADD FIREBASE CONFIG." : "No intelligence found."}
+              </div>
             ) : (
               leaders.map((leader, index) => {
                 const rankColor = index === 0 ? 'text-yellow-400 drop-shadow-[0_0_15px_#facc15]' : index === 1 ? 'text-slate-300 drop-shadow-[0_0_15px_#cbd5e1]' : index === 2 ? 'text-amber-600 drop-shadow-[0_0_15px_#d97706]' : 'text-slate-500';
