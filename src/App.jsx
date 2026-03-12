@@ -368,7 +368,6 @@ try {
   db = getFirestore(app);
 }
 
-
 // --- Constants & Config ---
 const MAX_SCORE_DIFFERENCE = 15; 
 
@@ -493,10 +492,11 @@ export default function App() {
     customName: "Cadet", avatar: "🐺", title: "Novice", banner: "void" 
   });
   const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const initAuth = async () => {
-      if (isOfflineMode) {
+      if (IS_OFFLINE) {
         setUser({ uid: 'local-offline-user' });
         setLoading(false);
         return;
@@ -516,7 +516,7 @@ export default function App() {
     };
     initAuth();
 
-    if (!isOfflineMode) {
+    if (!IS_OFFLINE) {
       const unsubscribe = onAuthStateChanged(auth, (u) => { 
         if (u) setUser(u); 
         setLoading(false); 
@@ -534,7 +534,7 @@ export default function App() {
       avatar: "🐺", title: "Novice", banner: "void" 
     };
 
-    if (isOfflineMode) {
+    if (IS_OFFLINE) {
        setStats(initialStats);
        return;
     }
@@ -557,7 +557,7 @@ export default function App() {
     const newStats = { ...stats, ...updates };
     setStats(newStats);
 
-    if (isOfflineMode) return;
+    if (IS_OFFLINE) return;
 
     try {
       await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), newStats, { merge: true });
@@ -619,7 +619,7 @@ export default function App() {
     matchData.newSR = newStats.sr;
     matchData.xpGained = xpGained;
 
-    if (isOfflineMode) return;
+    if (IS_OFFLINE) return;
 
     try { 
       await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'data'), newStats, { merge: true }); 
@@ -642,9 +642,21 @@ export default function App() {
         console.log('Error sharing', error);
       }
     } else {
-      // Fallback for browsers that don't support the Web Share API
-      navigator.clipboard.writeText(window.location.href);
-      // We avoid native alerts, relying on implicit OS feedback or just silent fallback 
+      // Fallback for browsers that don't support the Web Share API (iframe safe)
+      const textArea = document.createElement("textarea");
+      textArea.value = window.location.href;
+      textArea.style.position = "fixed"; // Prevents scrolling to bottom
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000); // Reset after 2 seconds
+      } catch (err) {
+        console.error('Fallback: Oops, unable to copy', err);
+      }
+      document.body.removeChild(textArea);
     }
   };
 
@@ -680,9 +692,10 @@ export default function App() {
           <div className="flex items-center gap-3 z-10 ml-auto">
              <button 
                 onClick={handleShare}
-                className="bg-blue-600 hover:bg-blue-500 p-2 md:px-4 md:py-2 rounded-xl font-bold flex items-center justify-center gap-2 text-sm transition border border-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.4)]"
+                className={`p-2 md:px-4 md:py-2 rounded-xl font-bold flex items-center justify-center gap-2 text-sm transition border shadow-[0_0_15px_rgba(59,130,246,0.4)] ${copied ? 'bg-emerald-600 border-emerald-400 text-white' : 'bg-blue-600 hover:bg-blue-500 border-blue-400'}`}
              >
-                <Share2 className="w-4 h-4" /> <span className="hidden md:inline">SHARE APP</span>
+                {copied ? <CheckCircle2 className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
+                <span className="hidden md:inline">{copied ? "LINK COPIED" : "SHARE APP"}</span>
              </button>
 
              {stats && (
@@ -1151,21 +1164,18 @@ function MultiplayerLobby({ user, currentConfig, onMatchReady }) {
   const hostedMatchIdRef = useRef(null); 
   const isMatchReadyRef = useRef(false);
 
-  // Check if offline
-  const isOfflineMode = firebaseConfig.apiKey === "dummy" || !firebaseConfig.apiKey;
-
   useEffect(() => {
     return () => { 
         if (unsubRef.current) unsubRef.current(); 
-        if (hostedMatchIdRef.current && !isMatchReadyRef.current && !isOfflineMode) {
+        if (hostedMatchIdRef.current && !isMatchReadyRef.current && !IS_OFFLINE) {
             updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'matches', hostedMatchIdRef.current), { status: 'CANCELLED' }).catch(()=>{});
         }
     };
-  }, [isOfflineMode]);
+  }, []);
 
   const createMatch = async () => {
     playArcadeSound('click');
-    if (isOfflineMode) {
+    if (IS_OFFLINE) {
        setErrorMsg("Multiplayer requires Firebase Configuration.");
        return;
     }
@@ -1203,7 +1213,7 @@ function MultiplayerLobby({ user, currentConfig, onMatchReady }) {
 
   const joinMatch = async () => {
     playArcadeSound('click');
-    if (isOfflineMode) {
+    if (IS_OFFLINE) {
        setErrorMsg("Multiplayer requires Firebase Configuration.");
        return;
     }
@@ -2566,8 +2576,7 @@ function GlobalLeaderboard({ user }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const isOfflineMode = firebaseConfig.apiKey === "dummy" || !firebaseConfig.apiKey;
-    if (isOfflineMode) {
+    if (IS_OFFLINE) {
       setLeaders([]);
       setLoading(false);
       return;
