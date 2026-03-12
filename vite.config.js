@@ -2,42 +2,14 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
+// https://vitejs.dev/config/
 export default defineConfig({
   base: '/math-tug-arena/', 
   plugins: [
     react(),
     VitePWA({ 
       registerType: 'autoUpdate',
-      injectRegister: 'inline',
-      manifestFilename: 'manifest.json', // <--- THIS FIXES THE .webmanifest 404
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,json}']
-      },
-      includeAssets: ['icon-192.png', 'icon-512.png'],
-      manifest: {
-        name: 'Math Tug Arena',
-        short_name: 'Math Tug',
-        description: 'Cybernetic Math Combat Arena',
-        theme_color: '#020617',
-        background_color: '#020617',
-        display: 'standalone',
-        start_url: '/math-tug-arena/',
-        scope: '/math-tug-arena/',
-        icons: [
-          {
-            src: 'icon-192.png',
-            sizes: '192x192',
-            type: 'image/png',
-            purpose: 'any maskable'
-          },
-          {
-            src: 'icon-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any maskable'
-          }
-        ]
-      }
+      manifest: false // This removes the requirement for a manifest and icons
     })
   ],
 })
