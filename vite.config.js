@@ -9,9 +9,9 @@ export default defineConfig({
     VitePWA({ 
       registerType: 'autoUpdate',
       injectRegister: 'inline',
-      base: '/math-tug-arena/', // Critical for GitHub Pages deployment path
+      manifestFilename: 'manifest.json', // <--- THIS FIXES THE .webmanifest 404
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}']
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,json}']
       },
       includeAssets: ['icon-192.png', 'icon-512.png'],
       manifest: {
@@ -22,7 +22,7 @@ export default defineConfig({
         background_color: '#020617',
         display: 'standalone',
         start_url: '/math-tug-arena/',
-        scope: '/math-tug-arena/', // Critical for GitHub Pages deployment path
+        scope: '/math-tug-arena/',
         icons: [
           {
             src: 'icon-192.png',
