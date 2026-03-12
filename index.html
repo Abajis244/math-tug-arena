@@ -15,13 +15,17 @@
     <meta property="og:title" content="Math Tug Arena">
     <meta property="og:description" content="Step into the arena! Test your mental math speed in this interactive web game.">
     
-    <!-- PWA Theme and iOS support -->
-    <meta name="theme-color" content="#020617" />
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      // Force unregister old service workers that cause 404 errors
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(regs => {
+          for (let reg of regs) reg.unregister();
+        });
+      }
+    </script>
   </head>
-  <body>
+  <body class="bg-slate-950">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
