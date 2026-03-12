@@ -2,13 +2,16 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
-// https://vitejs.dev/config/
 export default defineConfig({
   base: '/math-tug-arena/', 
   plugins: [
     react(),
     VitePWA({ 
       registerType: 'autoUpdate',
+      injectRegister: 'auto',
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg}']
+      },
       includeAssets: ['icon-192.png', 'icon-512.png'],
       manifest: {
         name: 'Math Tug Arena',
@@ -17,7 +20,8 @@ export default defineConfig({
         theme_color: '#020617',
         background_color: '#020617',
         display: 'standalone',
-        orientation: 'portrait-primary',
+        start_url: '/math-tug-arena/', // Crucial for GitHub Pages
+        scope: '/math-tug-arena/', // Crucial for GitHub Pages
         icons: [
           {
             src: 'icon-192.png',
