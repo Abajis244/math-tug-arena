@@ -1,15 +1,12 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  // Ensure the base matches your GitHub repository name
   base: '/math-tug-arena/', 
   plugins: [
-    react(),
-    VitePWA({ 
-      registerType: 'autoUpdate',
-      manifest: false // This removes the requirement for a manifest and icons
-    })
+    react()
+    // VitePWA has been removed to stop service worker registration and 404 errors
   ],
 })
