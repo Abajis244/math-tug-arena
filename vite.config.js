@@ -9,7 +9,6 @@ export default defineConfig({
     VitePWA({ 
       registerType: 'autoUpdate',
       injectRegister: 'auto',
-      base: '/math-tug-arena/', // This fixes the 404 for registerSW.js
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}']
       },
@@ -21,8 +20,8 @@ export default defineConfig({
         theme_color: '#020617',
         background_color: '#020617',
         display: 'standalone',
-        start_url: '/math-tug-arena/', 
-        scope: '/math-tug-arena/', // This fixes the 404 for the manifest
+        start_url: '/math-tug-arena/',
+        scope: '/math-tug-arena/',
         icons: [
           {
             src: 'icon-192.png',
