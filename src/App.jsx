@@ -342,21 +342,26 @@ const firebaseConfig = {
   measurementId: "G-55VJYDNDSR"
 };
 
-// SAFE GLOBAL DECLARATION: Checks if we are using the real key
-const IS_OFFLINE_MODE = !firebaseConfig.apiKey || firebaseConfig.apiKey.includes("dummy");
+// Check if we are running without a real key
+const isOfflineMode = !firebaseConfig.apiKey || firebaseConfig.apiKey.includes("dummy");
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Initialize Firebase safely (prevents errors on page refreshes)
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 
-// Initialize Firestore with Persistent Caching (Multi-Tab Support)
-const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({ 
-    tabManager: persistentMultipleTabManager() 
-  })
-});
+let db;
+try {
+  // Attempt to initialize with Multi-Tab Offline Caching
+  db = initializeFirestore(app, {
+    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+  });
+} catch (e) {
+  // Fallback if the browser doesn't support persistent caching or it's already active
+  db = getFirestore(app);
+}
 
 const appId = 'math-tug-arena';
+
 
 // --- Constants & Config ---
 const MAX_SCORE_DIFFERENCE = 15; 
