@@ -9,7 +9,7 @@ import {
 import { initializeApp } from 'firebase/app';
 import { 
   getFirestore, doc, setDoc, getDoc, onSnapshot, updateDoc, collection, 
-  serverTimestamp, increment, runTransaction, enableIndexedDbPersistence
+  serverTimestamp, increment, runTransaction, initializeFirestore, persistentLocalCache, persistentMultipleTabManager
 } from 'firebase/firestore';
 import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
 
@@ -347,13 +347,9 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = 'math-tug-arena';
 
-// Enable offline persistence for Firestore
-enableIndexedDbPersistence(db).catch((err) => {
-  if (err.code == 'failed-precondition') {
-      console.log('Multiple tabs open, persistence can only be enabled in one tab at a time.');
-  } else if (err.code == 'unimplemented') {
-      console.log('The current browser does not support all of the features required to enable persistence');
-  }
+// Use the modern initializeFirestore with persistent caching
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
 });
 
 // --- Constants & Config ---
