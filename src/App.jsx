@@ -342,6 +342,9 @@ const firebaseConfig = {
   measurementId: "G-55VJYDNDSR"
 };
 
+// SAFE GLOBAL DECLARATION: Checks if we are using the real key
+const IS_OFFLINE_MODE = !firebaseConfig.apiKey || firebaseConfig.apiKey.includes("dummy");
+
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -354,7 +357,6 @@ const db = initializeFirestore(app, {
 });
 
 const appId = 'math-tug-arena';
-
 
 // --- Constants & Config ---
 const MAX_SCORE_DIFFERENCE = 15; 
